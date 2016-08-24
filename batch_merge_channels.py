@@ -1,3 +1,29 @@
+#### batch_merge_channels.py ####
+# a Jython script for use with Fiji to merge channels and generate maximum
+# intensity projections from confocal microscopy images for viewing in
+# Fiji/ImageJ.
+#
+# Author: Nicholas Weir, Denic Laboratory, Harvard University
+# nweir@fas.harvard.edu
+# v. 1.0.0 8/23/2016
+# v. 1.0.1 8/24/2016 placing all outputs in one folder for easier movement
+# 
+# Please feel free to use, distribute, and modify this code however you see fit;
+#however, if you publish anything generated using any of my code, please
+# provide an acknowledgement!
+#
+####  IMPORTANT USAGE NOTES  ####
+#
+# This script is intended for use at the command line for headless operation of
+# ImageJ/Fiji. To use this script, enter the following command:
+#
+# ./ImageJ-macosx --headless /path/to/script/batch_merge_channels.py img_directory first_letter_of_colors
+#
+# Replace ./ImageJ-macosx with your platform's ImageJ launcher.
+# To indicate which channels are to be merged/projected, enter a string of the
+# first character in each color name in any order you like; for example, to
+# merge red, yellow, and cyan, you may enter ryc, cyr, etc. as an argument. use
+# w for brightfield.
 print "importing dependencies..."
 from ij import IJ, ImagePlus, ImageStack 
 from ij.plugin import RGBStackMerge, ZProjector
@@ -47,9 +73,12 @@ img_dir = sys.argv[1]
 print "image directory: " + img_dir
 colors = sys.argv[2]
 print "colors: " + colors
-output_dir = img_dir + '/merges'
+output_dir = img_dir + '/fiji_processing'
+merge_output_dir = output_dir+'/merges'
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
+if not os.path.exists(merge_output_dir):
+    os.mkdir(merge_output_dir)
 # retrieve the list of images
 dir_contents = os.listdir(img_dir)
 print "directory contents:"
@@ -102,7 +131,7 @@ cyan_wavelength = '447'
 green_wavelength = '488'
 yellow_wavelength = '515'
 red_wavelength = '594'
-bf_delimiter = 'Brightfield'
+bf_delimiter = 'brightfield'
 # create a dict of dicts. each sub-dictionary will contain key:value pairs
 # whose keys are a shortened version of an image's filename with the wavelength
 # information removed, and the value is the full filename. the top dictionary
@@ -146,7 +175,7 @@ print color_sublists
 im_series = color_sublists[first_wavelength].keys()
 print "im_series: "
 print im_series
-z_proj_dir = img_dir + '/z_projections'
+z_proj_dir = output_dir + '/z_projections'
 merge_z_dir = output_dir + '/z_projection_merges'
 if not os.path.exists(z_proj_dir):
     os.mkdir(z_proj_dir)
@@ -175,8 +204,6 @@ for stage_pos in im_series:
         imps_for_comp[4] = c_imp
     if cyan:
         cyan_id = color_sublists['cfp'][stage_pos]
-        print "cyan_id: " + cyan_id
-        print "path to cfp image: " + img_dir+'/'+cyan_id
         c_imp = ImagePlus(img_dir+'/'+cyan_id)
         imps_for_comp[4] = c_imp
     if green:
@@ -195,7 +222,7 @@ for stage_pos in im_series:
         bf_id = color_sublists['bf'][stage_pos]
         bf_imp = ImagePlus(img_dir+'/'+bf_id)
     composite = RGBStackMerge.mergeChannels(imps_for_comp, True)
-    IJ.saveAsTiff(composite, output_dir + '/' + stage_pos)
+    IJ.saveAsTiff(composite, merge_output_dir + '/' + stage_pos)
     composite.close()
     imps_for_z_comp = [None, None, None, None, None, None, None]
     if blue:
