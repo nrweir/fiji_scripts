@@ -1,7 +1,6 @@
-# @String img_dir
-# @String colors 
-
-from ij import IJ, ImagePlus, ImageStack, 
+print "importing dependencies..."
+from ij import IJ, ImagePlus, ImageStack 
+from ij.plugin import RGBStackMerge, ZProjector
 import os
 import sys
 
@@ -35,17 +34,27 @@ def mk_fname_ref(img_list, wlength_string, delimiter = '_'):
         wlength_rm.append(fname_no_wlength)
     return dict(zip(wlength_rm, wlength_imlist))
 
-# parse command line arguments
-if len(sys.argv) != 2:
-    sys.exit('Two command line arguments expected, ' + str(len(sys.argv)) +
-             'provided.')
-    img_dir = sys.argv[1]
-    colors = sys.argv[2]
+def maxZprojection(stackimp):
+    '''copied from EMBL CMCI python-ImageJ cookbook.'''
+    zp = ZProjector(stackimp)
+    zp.setMethod(ZProjector.MAX_METHOD)
+    zp.doProjection()
+    zpimp = zp.getProjection()
+    return zpimp
+
+print "creating output directory..."
+img_dir = sys.argv[1]
+print "image directory: " + img_dir
+colors = sys.argv[2]
+print "colors: " + colors
 output_dir = img_dir + '/merges'
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
 # retrieve the list of images
 dir_contents = os.listdir(img_dir)
+print "directory contents:"
+for i in dir_contents:
+    print i
 im_list = [i for i in dir_contents if i.lower().endswith('.tif')]
 blue = False
 cyan = False
@@ -68,6 +77,19 @@ if 'r' in colors:
     red = True
 if 'w' in colors:
     brightfield = True
+print "colors selected:"
+if blue:
+    print "blue"
+if cyan:
+    print "cyan"
+if green:
+    print "green"
+if yellow:
+    print "yellow"
+if red:
+    print "red"
+if brightfield:
+    print "brightfield"
 if yellow and green:
     print 'This script does not support overlay of green and yellow wavelengths.'
     sys.exit()
@@ -116,47 +138,98 @@ if brightfield:
     color_sublists['bf'] = mk_fname_ref(im_list, bf_delimiter)
 if first_wavelength == '':
     raise ValueError('No wavelengths selected.')
+print "color sublists:"
+print color_sublists
 # get the series of images identifier strings to be processed. see mk_fname_ref
 # to see how these are made identical amongst images from different
 # wavelengths.
 im_series = color_sublists[first_wavelength].keys()
+print "im_series: "
+print im_series
+z_proj_dir = img_dir + '/z_projections'
+merge_z_dir = output_dir + '/z_projection_merges'
+if not os.path.exists(z_proj_dir):
+    os.mkdir(z_proj_dir)
+if blue:
+    if not os.path.exists(z_proj_dir+'/blue'):
+        os.mkdir(z_proj_dir + '/blue')
+if cyan:
+    if not os.path.exists(z_proj_dir+'/cyan'):
+        os.mkdir(z_proj_dir + '/cyan')
+if green:
+    if not os.path.exists(z_proj_dir+'/green'):
+        os.mkdir(z_proj_dir+'/green')
+if red:
+    if not os.path.exists(z_proj_dir+'/red'):
+        os.mkdir(z_proj_dir+'/red')
+if yellow:
+    if not os.path.exists(z_proj_dir+'/yellow'):
+        os.mkdir(z_proj_dir+'/yellow')
+if not os.path.exists(merge_z_dir):
+    os.mkdir(merge_z_dir)
 for stage_pos in im_series:
-    cyan_id = '*None*'
-    green_id = '*None*'
-    red_id = '*None*'
-    bf_id = '*None*'
+    imps_for_comp = [None, None, None, None, None, None, None]
     if blue:
         cyan_id = color_sublists['bfp'][stage_pos]
-        c_imp = ImagePlus(cyan_id, img_dir+'/'+cyan_id)
+        c_imp = ImagePlus(img_dir+'/'+cyan_id)
+        imps_for_comp[4] = c_imp
     if cyan:
         cyan_id = color_sublists['cfp'][stage_pos]
-        c_imp = ImagePlus(cyan_id, img_dir+'/'+cyan_id)
+        print "cyan_id: " + cyan_id
+        print "path to cfp image: " + img_dir+'/'+cyan_id
+        c_imp = ImagePlus(img_dir+'/'+cyan_id)
+        imps_for_comp[4] = c_imp
     if green:
         green_id = color_sublists['gfp'][stage_pos]
-        g_imp = ImagePlus(green_id, img_dir+'/'+green_id)
+        g_imp = ImagePlus(img_dir+'/'+green_id)
+        imps_for_comp[1] = g_imp
     if yellow:
         green_id = color_sublists['yfp'][stage_pos]
-        g_imp = ImagePlus(green_id, img_dir+'/'+green_id)
+        g_imp = ImagePlus(img_dir+'/'+green_id)
+        imps_for_comp[1] = g_imp
     if red:
         red_id = color_sublists['rfp'][stage_pos]
-        r_imp = ImagePlus(red_id, img_dir+'/'+red_id)
+        r_imp = ImagePlus(img_dir+'/'+red_id)
+        imps_for_comp[5] = r_imp
     if brightfield:
         bf_id = color_sublists['bf'][stage_pos]
-        bf_imp = ImagePlus(bf_id, img_dir+'/'+bf_id)
-    cmd_string = 'c1=*None* c2='+green_id+' c3=*None* c4='+bf_id+' c5='+cyan_id+' c6='+red_id+' c7=*None* create'
-    composite = IJ.run('Merge Channels...', cmd_string)
+        bf_imp = ImagePlus(img_dir+'/'+bf_id)
+    composite = RGBStackMerge.mergeChannels(imps_for_comp, True)
     IJ.saveAsTiff(composite, output_dir + '/' + stage_pos)
+    composite.close()
+    imps_for_z_comp = [None, None, None, None, None, None, None]
     if blue:
+        z_cyan = maxZprojection(c_imp)
+        IJ.saveAsTiff(z_cyan, z_proj_dir+'/blue/'+stage_pos)
+        imps_for_z_comp[4] = z_cyan
         c_imp.close()
     if cyan:
+        z_cyan = maxZprojection(c_imp)
+        IJ.saveAsTiff(z_cyan, z_proj_dir+'/cyan/'+stage_pos)
+        imps_for_z_comp[4] = z_cyan
         c_imp.close()
     if green:
+        z_green = maxZprojection(g_imp)
+        IJ.saveAsTiff(z_green, z_proj_dir+'/green/'+stage_pos)
+        imps_for_z_comp[1] = z_green
         g_imp.close()
     if yellow:
+        z_green = maxZprojection(g_imp)
+        IJ.saveAsTiff(z_green, z_proj_dir+'/yellow/'+stage_pos)
+        imps_for_z_comp[1] = z_green
         g_imp.close()
     if red:
+        z_red = maxZprojection(r_imp)
+        IJ.saveAsTiff(z_red, z_proj_dir+'/red/'+stage_pos)
+        imps_for_z_comp[5] = z_red
         r_imp.close()
     if brightfield:
-        bf_imp.close()
-    composite.close()
+        bf_NSlices = bf_imp.getNSlices()
+        if bf_NSlices > 1:
+            bf_stack = bf_imp.getStack()
+            desired_slice = int(bf_NSlices/2)
+            bf_imp = bf_stack.getProcessor(desired_slice)
+        imps_for_z_comp[3] = bf_imp
+    z_composite = RGBStackMerge.mergeChannels(imps_for_z_comp, True)
+    IJ.saveAsTiff(z_composite, merge_z_dir+'/'+stage_pos)
 
